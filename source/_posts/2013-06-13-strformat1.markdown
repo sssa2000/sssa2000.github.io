@@ -1,0 +1,391 @@
+---
+layout: post
+title: "从变长参数到格式化字符串1:谈变长参数"
+date: 2013-06-13 01:07
+comments: true
+categories: 
+---
+
+
+C语言有变长参数，C++语言并没有在这个概念上做出什么有意义的新东西。兼容了C的语法而已。
+
+说实话每次用到可变参数我都记不得要怎么使用它，每次我都是找到以往的代码然后才能写出正确操作变长参数的代码，然后又忘记......
+
+本文将专注于以下问题，这些问题是我自己常常疑惑不解的。
+
+* 为什么教科书上说变长参数不能用于pascal call？或者说pascal call为什么不支持变长参数呢？
+* 为什么得到变长参数前面还需要至少有一个参数？
+* 为什么变长参数只能是最后一个参数？
+* 为什么va_arg需要传一个古怪的类型作为参数？
+
+<!-- more -->
+
+##用法和规则
+###变长参数作为函数参数
+
+首先，作为函数不能是pascal call方式的，这一条在较老的教科书上出现过，后文对这一条有详细描述。
+其次，可变参数只能是函数参数的最后一个参数，并且，在可变参数前面必须至少要有一个非可变参数。
+
+规则说完了，说用法。
+```cpp
+void test_varg(const char* s,...)
+{
+va_list va;
+va_start(va,s);
+const char* t = va_arg (va, const char*);
+va_end(va);
+}
+```
+
+在C语言中访问变长参数需要一个“类型”：va_list。实际上这是一个宏，真正类型是void*。
+
+在获取可变参数之前需要调用一次va_start宏。va_start宏的参数就是变长参数前面那个参数。完成后可以调用一次va_end宏。
+
+每获取一个可变参数，需要调用一次va_arg宏，va_arg宏每调用一次就会指向下一个可变参数。va_arg宏的第一个参数是va_list，第二个参数看上去很奇怪，它不是一个变量而是一个类型名。这在C语言中看上去很不和谐。
+
+这里要注意的是，va_arg宏不会做边界检查，什么时候停止需要程序员自己搞定。也就是说变长参数的个数需要编写程序的人自己搞定。一般来说，变长参数前的那一个参数是变长参数的个数，或者变长参数的最后一个参数是一个特殊的值。在这一点上编译器应该能做到更好的。 
+
+###变长参数为宏参数
+C99中可以将变长参数作为宏的参数。这里宏的变长参数的规定：可变参数只能是宏参数的最后一个参数。
+
+另外还有一个编译器内置的宏和这个功能息息相关： ```__VA_ARGS__``` 。这个参数能够表示宏参数中所有的变长参数。有了这个宏给就可以把宏中的可变参数原封不动的转发给函数了：
+```cpp
+#define MY_VARG_FUN(...) print_varg(0,__VA_ARGS__)
+```
+
+也就是说，在宏中使用变长参数有两点便利之处：
+
+*  变长参数前不必一定要有一个参数
+*  变长参数可以原封不懂的转发，并且还能在后面添加参数。如下所示：
+```cpp
+#define MY_VARG_FUN(funname,...) funname (0,__VA_ARGS__,"__VARGS_END")
+```
+
+那么在上面的宏的基础上，接受变长参数的函数可以这么写：
+```cpp
+void print_varg(int beg,...)
+{
+   va_list va;
+   va_start(va,beg);
+   while(1)
+   {
+      const char* t = va_arg (va, const char*);
+      if(strcmp(t,"__VARGS_END")==0)
+         break;
+      printf(t);
+   }
+
+   va_end(va);
+}
+```
+当然这么简化也只是微不足道的，实际上格式化字符串例如sprintf这样的函数也不会这样使用变长参数。
+
+##变长参数槽点
+
+*  类型不安全，尤其是在va_arg传入一个类型名作为函数实参的做法让人感到诡异莫名。
+*  语言没有提供获取参数个数的功能。
+*  va_arg调用时要求传入一个类型不但让代码写起来很困难而且很难看
+*  变长参数前面必须有一个参数且变长参数只能是最后一个参数
+*  做为函数的变长参数转发困难。比如有2个函数void FunA(int len,…); void FunB(int len,…);需要在FunA中调用FunB，那么就只能辛苦点了。
+
+##变长参数实现原理简析
+ 
+万变不离其宗。变长参数也无非是允许以一种不安全的方式来获取调用栈中的参数信息而已。
+
+{% img /images/1/fun_stack.png %}
+
+###va_list真面目
+实际上就是char*。
+```cpp
+typedef char *  va_list;
+```
+###变长3剑客真面目
+
+可以看到va_start、va_arg、va_end这3个是宏：
+```cpp
+#define va_start _crt_va_start
+#define va_arg _crt_va_arg
+#define va_end _crt_va_end
+```
+顺藤摸瓜下去，在```<vadefs.h>```中有定义：
+```cpp
+… …
+#elif   defined(_M_IX86)
+ 
+#define _INTSIZEOF(n)   ( (sizeof(n) + sizeof(int) - 1) & ~(sizeof(int) - 1) )
+#define _crt_va_start(ap,v)  ( ap = (va_list)_ADDRESSOF(v) + _INTSIZEOF(v) )
+#define _crt_va_arg(ap,t)    ( *(t *)((ap += _INTSIZEOF(t)) - _INTSIZEOF(t)) )
+#define _crt_va_end(ap)      ( ap = (va_list)0 )
+```
+###_INTSIZEOF详解
+上面这么多宏意思很简单，就是为了能够处理好字节对齐的问题。因为在x86 windows平台下不管这个参数实际大小是多少，任何变量的地址必然是4字节对齐的。
+
+_INTSIZEOF的宏看上去挺复杂，实际上这里的意思就是，n表示一个大小，假设sizeof(int)=4,那么求把n按照4字节对齐后的大小。例如_INTSIZEOF(3) =4；_INTSIZEOF(5)=8。说白了就是：ceil(sizeof(n)/sizeof(int))。
+
+那这行代码是怎么得来的呢？
+```cpp
+#define _INTSIZEOF(n)   ( (sizeof(n) + sizeof(int) - 1) & ~(sizeof(int) - 1) )
+```
+是这样推导的，为了计算ceil，那么先给sizeof(n)加上一个肯定不会大于1的数字，然后再除以sizeof(int),将得到的结果取整数部分即可。就是：
+
+ $$ \ _INTSIZEOF(n)=\frac{sizeof\left ( n \right ) + sizeof\left ( int \right ) - 1}{sizeof(int)}*sizeof(int)$$
+
+
+由于在x86平台上，sizeof(int)总是2的n次幂，所以除以sizeof(int)就相当于右移，乘以sizeof(int)就相当于左移。如果sizeof(int)=4，那么先右移2位再左移2位，就相当于是把低2位变成0，即可。
+
+至于其它的bit不用关心，保持不变即可。 
+
+汇编
+以下代码在vs2010的debug模式下获得。
+```
+int _tmain(int argc, _TCHAR* argv[])
+{
+... ...
+test_varg("abc","def","ghijk");
+00D1140E  push        0D157A8h  
+00D11413  push        0D15740h  
+00D11418  push        0D1573Ch  
+00D1141D  call        00D11159  
+00D11422  add         esp,0Ch  
+return 0;
+00D11425  xor         eax,eax  
+}
+ 
+void test_varg(const char* s,...)
+{
+... ...
+va_list va;
+va_start(va,s);
+010913AE  lea         eax,[ebp+0Ch]  
+010913B1  mov         dword ptr [ebp-8],eax  ;ebp-8就是局部变量va
+ 
+const char* t = va_arg (va, const char*);
+010913B4  mov         eax,dword ptr [ebp-8]  
+010913B7  add         eax,4  
+010913BA  mov         dword ptr [ebp-8],eax  ;先把地址+4保存在局部变量va中
+010913BD  mov         ecx,dword ptr [ebp-8]  
+010913C0  mov         edx,dword ptr [ecx-4]  
+010913C3  mov         dword ptr [ebp-14h],edx  ;再-4，放到局部变量t中
+ 
+va_end(va);
+010913C6  mov         dword ptr [ebp-8],0  
+ 
+}
+```
+从上面的汇编代码可以看到，在调用一个函数的时候，使用变长参数并没有什么特殊之处。push参数之后调用call指令。
+
+va_list真正的作用实际上是起到一个指针，通过操作这个指针来获取到传入的可变参数。va_start的作用就是根据变长参数前面那个指针来确定第一个变长参数的地址。va_arg的作用实际上就是返回当前指向的参数的地址，同时把va_list指向下一个参数。va_end的作用可有可无，把指针设置0罢了。
+
+但是作为一门高级语言，函数栈帧这样底层的东西实际上是对使用者透明的，为了能够以一种比较友好的方式达到变长参数的目的，就有了这样几个奇怪的宏。
+变长参数和函数调用约定的恩怨
+网络上有人说，pascal调用方式中，由于参数是从左到右入栈的，所以不能支持变长参数。我不认同这个观点。我觉得只要编译器想知道，无论怎么入栈都能确定变长参数的个数。
+
+我认为真正的原因还是由于清理调用栈的方式决定了pascal不能支持变长参数。因为pascal调用方式是被调用者清理的，在有变长参数的情况下，被调用者无法在编译器确切知道参数的个数。
+
+接下来说下vs关于pascal的调用方式。早在vc6的时候，vs就不再支持pascal的调用方式了，pascal调用方式被定义成了__stdcall。这个可以在下面网址看到：
+http://msdn.microsoft.com/en-us/library/wda6h6df(v=vs.110).aspx
+
+从微软得到的信息如下表所示，当前一共有以下几种调用约定
+
+<table cellpadding="0" border="1" style=
+"BORDER-BOTTOM: medium none; BORDER-LEFT: medium none; BORDER-COLLAPSE: collapse; BORDER-TOP: medium none; BORDER-RIGHT: medium none; mso-border-alt: solid #BBBBBB .75pt; mso-yfti-tbllook: 1184; mso-padding-alt: 0cm 0cm 0cm 0cm"
+cellspacing="0">
+   <tbody>
+      <tr style="mso-yfti-irow: 0; mso-yfti-firstrow: yes">
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #bbbbbb 1pt solid; PADDING-BOTTOM: 7.5pt; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BACKGROUND: #ededed; BORDER-TOP: #bbbbbb 1pt solid; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt">
+         <p style="MARGIN: 0cm 0cm 0pt">
+               <strong>Keyword</strong>
+            </p>
+         </td>
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #f0f0f0; PADDING-BOTTOM: 7.5pt; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BACKGROUND: #ededed; BORDER-TOP: #bbbbbb 1pt solid; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-left-alt: solid #BBBBBB .75pt">
+         <p style="MARGIN: 0cm 0cm 0pt">
+               <strong>Stack cleanup</strong>
+            </p>
+         </td>
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #f0f0f0; PADDING-BOTTOM: 7.5pt; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BACKGROUND: #ededed; BORDER-TOP: #bbbbbb 1pt solid; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-left-alt: solid #BBBBBB .75pt">
+         <p style="MARGIN: 0cm 0cm 0pt">
+               <strong>Parameter passing</strong>
+            </p>
+         </td>
+      </tr>
+      <tr style="mso-yfti-irow: 1">
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #bbbbbb 1pt solid; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               <a href="http://msdn.microsoft.com/en-us/library/zkwh89ks.aspx">__cdecl</a>
+            </p>
+         </td>
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #f0f0f0; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-left-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               Caller
+            </p>
+         </td>
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #f0f0f0; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-left-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               Pushes parameters on the stack, in reverse order (right to left)
+            </p>
+         </td>
+      </tr>
+      <tr style="mso-yfti-irow: 2">
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #bbbbbb 1pt solid; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               <a href="http://msdn.microsoft.com/en-us/library/ec7sfckb.aspx">__clrcall</a>
+            </p>
+         </td>
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #f0f0f0; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-left-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               n/a
+            </p>
+         </td>
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #f0f0f0; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-left-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               Load parameters onto CLR expression stack in order (left to right).
+            </p>
+         </td>
+      </tr>
+      <tr style="mso-yfti-irow: 3">
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #bbbbbb 1pt solid; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               <a href="http://msdn.microsoft.com/en-us/library/zxk0tw93.aspx">__stdcall</a>
+            </p>
+         </td>
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #f0f0f0; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-left-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               Callee
+            </p>
+         </td>
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #f0f0f0; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-left-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               Pushes parameters on the stack, in reverse order (right to left)
+            </p>
+         </td>
+      </tr>
+      <tr style="mso-yfti-irow: 4">
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #bbbbbb 1pt solid; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               <a href="http://msdn.microsoft.com/en-us/library/6xa169sk.aspx">__fastcall</a>
+            </p>
+         </td>
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #f0f0f0; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-left-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               Callee
+            </p>
+         </td>
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #f0f0f0; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-left-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               Stored in registers, then pushed on stack
+            </p>
+         </td>
+      </tr>
+      <tr style="mso-yfti-irow: 5; mso-yfti-lastrow: yes">
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #bbbbbb 1pt solid; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               <a href="http://msdn.microsoft.com/en-us/library/ek8tkfbw.aspx">__thiscall</a>
+            </p>
+         </td>
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #f0f0f0; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-left-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               Callee
+            </p>
+         </td>
+         <td style=
+         "BORDER-BOTTOM: #bbbbbb 1pt solid; BORDER-LEFT: #f0f0f0; PADDING-BOTTOM: 7.5pt; BACKGROUND-COLOR: transparent; PADDING-LEFT: 6pt; PADDING-RIGHT: 6pt; BORDER-TOP: #f0f0f0; BORDER-RIGHT: #bbbbbb 1pt solid; PADDING-TOP: 7.5pt; mso-border-alt: solid #BBBBBB .75pt; mso-border-left-alt: solid #BBBBBB .75pt; mso-border-top-alt: solid #BBBBBB .75pt"
+         valign="top">
+            <p style="MARGIN: 0cm 0cm 0pt">
+               Pushed on stack; <strong>this</strong> pointer stored in ECX
+            </p>
+         </td>
+      </tr>
+   </tbody>
+</table>
+
+
+所以说根据上表可知，只有__cdecal能够使用变长参数。在msdn上也有这样一句话：
+```
+The __stdcall calling convention is used to call Win32 API functions. The callee cleans the stack, so the compiler makes vararg functions __cdecl. Functions that use this calling convention require a function prototype.
+```
+也就是说，如果你在__stdcall中使用了变长参数编译器会偷偷帮你转化为__cdecl。为了验证这个说法写了个简单的测试程序：
+```cpp
+void __stdcall fun_varg_stdcall(int len,...)
+{
+   printf("fun_varg_stdcall");
+}
+void __stdcall fun_novarg_stdcall(int len,int arg1)
+{
+   printf("fun_novarg_stdcall");
+}
+int _tmain(int argc, _TCHAR* argv[])
+{
+   fun_varg_stdcall(2,1);
+   fun_novarg_stdcall(2,1);
+   return 0;
+}
+```
+观察生成的汇编代码：
+在main函数中，生成的汇编如下：
+```
+   fun_varg_stdcall(2,1);
+01271CE4  push        1  
+01271CE6  push        2  
+01271CE8  call        fun_varg_stdcall (1271118h)  
+01271CED  add         esp,8  
+   fun_novarg_stdcall(2,1);
+01271CF0  push        1  
+01271CF2  push        2  
+01271CF4  call        fun_novarg_stdcall (12711E5h) 
+``` 
+再看fun_varg_stdcall函数和fun_novarg_stdcall中生成的汇编，这两个函数的汇编在最后return的时候有点差别：
+
+fun_varg_stdcall函数的最后一行汇编是
+
+```
+01271528  ret
+```
+
+而fun_novarg_stdcall函数的最后一行汇编是
+```
+01271588  ret         8  
+```
+
+
+很明显，同样是__stdcall，当有变长参数的时候编译器确实偷偷的做了手脚。
+
+##思考
+
+通过这几天对变长参数的研究，我大概明白了为什么变长参数这么难用，老让人记不住。主要还是由于变长参数涉及到几个C语言中的问题，例如函数调用约定，地址对齐，函数调用栈帧分布等等。这些事情其实统统都是由编译器生成汇编代码的时候就搞定了的。
+
+但是变长参数这件事情编译器却没有任何作为。从前文的分析可知，变长参数的实现完全是利用语言层面的一些low level的技巧来实现的，当然这没什么问题。
+
+问题是编写者用宏来隐藏了一些实现的细节，让使用者比较容易的使用这个功能。只可惜这组宏用起来和其他的函数调用差异较大，且危险重重。
+
+编译器不做为也就算了，但是编译器把```__stdcall```偷偷摸摸改为```__cdecl```的方式确实会造成很大的坑。

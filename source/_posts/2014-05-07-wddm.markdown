@@ -1,0 +1,56 @@
+---
+layout: post
+title: "wddm"
+date: 2014-05-07 02:15
+comments: true
+categories: 
+---
+
+----------
+
+
+<!--more-->
+##WDDM简介
+WDDM(Windows Display Driver Model)是windows从vista时代开始采用的显卡驱动模型。与之相对的是XPDM，也就是xp时代的driver model。
+
+XPDM时代，微软设想的是，让显卡驱动程序直接和显卡打交道。在XP当道的这段时间里，GPU得到了长足的发展，驱动程序负责的事情也越来越多，越来越复杂。由于驱动程序都是跑在Ring0层的，所以如果驱动程序发生错误，那么整个操作系统都会崩溃或者蓝屏。显然，微软认为施加给各个GPU厂商的约束不够强，导致XPDM的驱动不够稳定。
+
+随着操作系统的进化，WDDM也在进化：
+
+ - Vista：WDDM1.0
+ - Win7：WDDM1.1
+ - Win8：WDDM1.2
+ - Win8.1：WDDM1.3
+
+
+
+下图给出了Vista中，windows中的图形图像有关的静态结构图。从图中可以看出window vista提供了更多的图形接口，以及这些图形接口是如何同驱动、同系统的kernel交互的。
+ 
+ {% img/images/wddm/1.jpg %}
+ 
+##WDDM的改进
+
+ 1. 和XPDM相比，WDDM更鲁棒。这体现在：WDDM将驱动分为了用户态驱动（UMD）和内核态驱动（KMD）。也就是说将复杂的、可能出错的计算放在Ring3层来做。减少系统崩溃的可能。例如，在vista后的时代，有当显卡驱动程序长时间未响应或者显卡驱动发生严重错误时，操作系统能够重新将驱动程序重启，而不需要重启计算机。
+ {% img/images/wddm/2.jpg %}
+
+ 2. WDDM具有更高的抽象层次，对应用程序来说更加友好，这体现在：
+    
+    a)	虚拟化显存（Virtualizes video memory）。意思是：显存随便申请，只要不大于进程地址空间就没事，驱动会帮你调度、倒腾显存、内存、硬盘。
+    
+    b)	GPU在工作过程中允许被打断。应用程序如果需要使用GPU，那么用就是了，WDDM会来决定什么时候打断，什么时候切换上下文。这个特性让DWM具有更好的响应速度。打断的粒度分两种：如果是Dx9级别的驱动，那么一个图元（primitive ）就是最小的打断粒度。DWM就是Dx9的应用程序，如果有另一个程序绘制很大面积的图元或者绘制使用很复杂的shader的话，会导致DWM响应速度下降。另一种粒度是可以让GPU在绘制一个图元的过程中被打断，但是需要Dx10级别的驱动。
+ 3. 允许跨进程共享Surface。这个是Win7下DWM的改进的关键点。
+
+
+##UMD和KMD
+ {% img/images/wddm/3.jpg %}
+UMD存在于每个进程中，运行在Ring3层。UMD主要负责：维护Command Buffer、编译Shader等工作。
+Command Buffer大小固定，如果满了要驱动会负责flush。
+
+KMD存在于系统的Kernel中，运行在Ring0层。KMD负责和GPU通信，同时还负责调度GPU供多进程访问GPU资源。为了能够让多进程更好的利用GPU，KMD中也维护有一个队列，该队列中存放有各个进程需要GPU工作的命令，出于效率考虑，这个队列实现方式是DMA Buffer，这样省去了总线传输的消耗。
+
+KMD通过DMA Buffer把Command Buffer内容传输到GPU能访问的显存中。如果KMD中的DMA Buffer满了，那么所有进程的Present调用会被阻塞。
+
+
+##从GPUView看WDDM
+gpuview这个工具中很好的反映了UMD和KMD的架构。如下图所示：
+ {% img/images/wddm/4.jpg %}
