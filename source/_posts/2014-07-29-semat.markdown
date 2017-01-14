@@ -1,7 +1,0 @@
----
-layout: post
-title: "semat"
-date: 2014-07-29 02:29
-comments: true
-categories: 
----
