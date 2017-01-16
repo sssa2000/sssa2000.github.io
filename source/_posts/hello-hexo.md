@@ -96,4 +96,22 @@ git push origin hexo_source
 ```
 
 ------
-##在其他机器安装
+## 在Mac 下的安装
+- 首先要在Mac上安装Xcode，因为homebrew依赖。
+- 安装homebrew主要是为了方便的安装git。安装homebrew的方法是在终端输入
+```
+ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+```
+- 安装Node.js。我是在官网下载的dmg安装的 也可以用git的方式安装
+- 克隆blog的仓库。因为这个时候github上已经有仓库了，所以只需要克隆下来即可。假设克隆的仓库的地址是gitblog
+- 进入到gitblog目录，切换到hexo_source分支。这个分支是之前在另一台电脑上创建的分支 已经上传github。
+- 进入到gitblog，安装hexo：也就是在终端执行hexo init，或者在别的目录执行hexo init 然后把文件拷贝过来
+- 在repo目录下 执行npm安装几个hexo的插件
+```
+$ npm install hexo-deployer-git --save
+$ npm install hexo-renderer-jade --save 
+$ npm install hexo-renderer-sass --save
+$ npm install https://github.com/CodeFalling/hexo-asset-image --save
+- 此时已经可以用了。
+
+
