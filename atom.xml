@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Hippo &amp; YirigaCheffee</title>
+  <subtitle>sssa2000&#39;s tech blog</subtitle>
+  <link href="/atom.xml" rel="self"/>
+  
+  <link href="http://sssa2000.github.io/"/>
+  <updated>2017-02-20T18:14:12.445Z</updated>
+  <id>http://sssa2000.github.io/</id>
+  
+  <author>
+    <name>sssa2000</name>
+    
+  </author>
+  
+  <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>强类型枚举 和 bool 传参</title>
+    <link href="http://sssa2000.github.io/2017/02/21/Toggles-Use-Enum-in-cpp11/"/>
+    <id>http://sssa2000.github.io/2017/02/21/Toggles-Use-Enum-in-cpp11/</id>
+    <published>2017-02-20T16:38:13.000Z</published>
+    <updated>2017-02-20T18:14:12.445Z</updated>
+    
+    <content type="html"><![CDATA[<p>闲话不多说，以下只是我的粗略加工，在此记录。原始内容来自这篇文章：<br>Toggles in functions<br><a href="https://akrzemi1.wordpress.com/2017/02/16/toggles-in-functions/" target="_blank" rel="external">https://akrzemi1.wordpress.com/2017/02/16/toggles-in-functions/</a></p>
+<h2 id="问题"><a href="#问题" class="headerlink" title="问题"></a>问题</h2><p>作者提到：cpp 中的某些代码会使用 bool 作为参数，例如：<br><figure class="highlight cpp"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">process(<span class="literal">true</span>, <span class="literal">false</span>);</div></pre></td></tr></table></figure></p>
+<p>但是这样有几个不好的地方：</p>
+<ul>
+<li>可读性问题。阅读代码的人看到这样的代码完全不知道 true、false 代表的含义是什么。</li>
+<li>某些同学可能会说可以借助IDE的功能解决。但是如果是这样的代码，可能IDE也帮不了你：</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line"><span class="built_in">std</span>::function&lt;<span class="keyword">void</span>(<span class="keyword">bool</span>, <span class="keyword">bool</span>)&gt; callback = &amp;process;</div><div class="line">callback(???, ???); <span class="comment">// what names to use?</span></div></pre></td></tr></table></figure>
+<ul>
+<li>如果 process 这个函数是某个基类的成员虚函数时，如果不小心的话，子类覆盖的时候很可能会让两个参数的位置发生交换。这个坑我自己是踩过的，我记得当时是深夜，查到这个问题的时候哭笑不得。</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">struct</span> Base</div><div class="line">&#123;</div><div class="line">  <span class="function"><span class="keyword">virtual</span> <span class="keyword">void</span> <span class="title">process</span><span class="params">(<span class="keyword">bool</span> withValidation,</span></span></div><div class="line">                       <span class="keyword">bool</span> withNewEngine);</div><div class="line">&#125;;</div><div class="line"> </div><div class="line"><span class="keyword">struct</span> Derived : Base</div><div class="line">&#123;</div><div class="line">  <span class="function"><span class="keyword">void</span> <span class="title">process</span><span class="params">(<span class="keyword">bool</span> withNewEngine,</span></span></div><div class="line">               <span class="keyword">bool</span> withValidation) override;</div><div class="line">&#125;;</div></pre></td></tr></table></figure>
+<ul>
+<li>如果你的构造函数有2个bool参数，那么explicit 也帮不了你，编译器只会报告一个警告，如果忽视的话很可能引起问题。</li>
+</ul>
+<h2 id="问题的原因"><a href="#问题的原因" class="headerlink" title="问题的原因"></a>问题的原因</h2><p>作者认为，人们使用bool的原因有：</p>
+<ul>
+<li>小。size=1.</li>
+<li>只有两个状态。</li>
+</ul>
+<p>所以作者提出：使用 cpp11的强类型枚举，来解决这个问题。对应的关键字是： <strong>enum class</strong> 。 </p>
+<p>强类型枚举的特点：</p>
+<ul>
+<li>访问枚举值需要用“类名::”，不能在类的外部直接访问。</li>
+<li>int 和 强类型枚举之间 无法隐式转换。</li>
+<li>可以指定枚举的底层数据类型，而不是只能用int。</li>
+</ul>
+<h2 id="具体办法"><a href="#具体办法" class="headerlink" title="具体办法"></a>具体办法</h2><p>使用上面的方案，作者给出的代码也很简单</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">enum</span> <span class="keyword">class</span> WithValidation : <span class="keyword">bool</span> &#123; False, True &#125;;</div><div class="line"><span class="keyword">enum</span> <span class="keyword">class</span> WithNewEngine  : <span class="keyword">bool</span> &#123; False, True &#125;;</div><div class="line"></div><div class="line"><span class="function"><span class="keyword">void</span> <span class="title">process</span><span class="params">(WithValidation withValidation,</span></span></div><div class="line">             WithNewEngine  withNewEngine);</div></pre></td></tr></table></figure>
+<p>调用的时候必须这样：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">process(WithValidation::False, WithNewEngine::True); <span class="comment">// ok</span></div></pre></td></tr></table></figure>
+<p>但是依然有一些不方便的地方：</p>
+<ul>
+<li>当需要读取枚举为bool值时，需要显示转换：</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">if</span> (<span class="keyword">bool</span>(withNewEngine) || <span class="keyword">bool</span>(withValidation))</div><div class="line">  validate();</div></pre></td></tr></table></figure>
+<ul>
+<li>当 set 枚举值时，也无法直接用bool，因为无法隐式转换。</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">class</span> X</div><div class="line">&#123;</div><div class="line">  WithNewEngine _withNewEngine;</div><div class="line"> </div><div class="line"><span class="keyword">public</span>:</div><div class="line">  X() </div><div class="line">    : _withNewEngine(WithNewEngine(<span class="literal">true</span>)) <span class="comment">// : _withNewEngine(true) // fails</span></div><div class="line"></div><div class="line">&#125;;</div></pre></td></tr></table></figure>
+<h2 id="进一步解决"><a href="#进一步解决" class="headerlink" title="进一步解决"></a>进一步解决</h2><p>为了解决无法隐式转换带来的不方便，需要做一些额外工作，其实就是需要一个util class，实现 operator bool() 。<br>作者给出了实现：<a href="https://github.com/akrzemi1/explicit/blob/master/include/ak_toolkit/tagged_bool.hpp" target="_blank" rel="external">https://github.com/akrzemi1/explicit/blob/master/include/ak_toolkit/tagged_bool.hpp</a></p>
+<p>这个util class 叫 tagged_bool ， 值得一提的是，tagged_bool 是作者的开源库 explicit 的一部分，这个库中有很多用于类型显示转换的小函数，用于编译期检查代码，减少类型转换带来的 bug 的可能。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">using</span> WithValidation = tagged_bool&lt;<span class="keyword">class</span> WithValidation_tag&gt;;</div><div class="line"><span class="keyword">using</span> WithNewEngine  = tagged_bool&lt;<span class="keyword">class</span> WithNewEngine_tag&gt;;</div><div class="line"></div><div class="line"><span class="function"><span class="keyword">void</span> <span class="title">process</span><span class="params">(WithValidation withValidation,</span></span></div><div class="line">             WithNewEngine  withNewEngine)</div><div class="line">&#123;</div><div class="line">  <span class="keyword">if</span> (withNewEngine || withValidation)  <span class="comment">// ok</span></div><div class="line">    validate();</div><div class="line"> </div><div class="line">  <span class="comment">// ...</span></div><div class="line">&#125;</div><div class="line"> </div><div class="line">process(WithValidation&#123;<span class="literal">true</span>&#125;, WithNewEngine&#123;<span class="literal">false</span>&#125;); <span class="comment">// ok</span></div><div class="line">process(WithNewEngine&#123;<span class="literal">true</span>&#125;, WithValidation&#123;<span class="literal">false</span>&#125;); <span class="comment">// fails</span></div></pre></td></tr></table></figure>
+<h2 id="附：tagged-bool-实现"><a href="#附：tagged-bool-实现" class="headerlink" title="附：tagged_bool 实现"></a>附：tagged_bool 实现</h2><figure class="highlight"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div><div class="line">34</div><div class="line">35</div><div class="line">36</div><div class="line">37</div><div class="line">38</div><div class="line">39</div><div class="line">40</div><div class="line">41</div><div class="line">42</div><div class="line">43</div><div class="line">44</div><div class="line">45</div><div class="line">46</div><div class="line">47</div></pre></td><td class="code"><pre><div class="line"></div><div class="line">// Copyright (C) 2016 Andrzej Krzemienski.</div><div class="line">//</div><div class="line">// Use, modification, and distribution is subject to the Boost Software</div><div class="line">// License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at</div><div class="line">// http://www.boost.org/LICENSE_1_0.txt)</div><div class="line"></div><div class="line">#ifndef AK_TOOLKIT_EXPLICIT_TAGGED_BOOL_HEADER_GUARD_</div><div class="line">#define AK_TOOLKIT_EXPLICIT_TAGGED_BOOL_HEADER_GUARD_</div><div class="line"></div><div class="line">namespace ak_toolkit &#123;</div><div class="line">namespace xplicit &#123;</div><div class="line">namespace tagged_bool_ns &#123; // artificial namespace to prevent ADL into namespace xplicit</div><div class="line"></div><div class="line">template &lt;typename Tag&gt;</div><div class="line">class tagged_bool</div><div class="line">&#123;</div><div class="line">    bool value;</div><div class="line">    </div><div class="line">    template &lt;typename /*OtherTag*/&gt;</div><div class="line">        friend class tagged_bool;</div><div class="line">    </div><div class="line">public:</div><div class="line">  </div><div class="line">    constexpr explicit tagged_bool (bool v) : value &#123;v&#125; &#123;&#125;</div><div class="line">    </div><div class="line">    constexpr explicit tagged_bool (int) = delete;</div><div class="line">    constexpr explicit tagged_bool (double) = delete;</div><div class="line">    constexpr explicit tagged_bool (void*) = delete;</div><div class="line">    </div><div class="line">    template &lt;typename OtherTag&gt;</div><div class="line">        constexpr explicit tagged_bool (tagged_bool&lt;OtherTag&gt; b) : value &#123;b.value&#125; &#123;&#125;</div><div class="line">    </div><div class="line">    constexpr explicit operator bool() const &#123; return value; &#125;</div><div class="line">    </div><div class="line">    friend constexpr bool operator==(tagged_bool l, tagged_bool r) &#123; return l.value == r.value; &#125;</div><div class="line">    friend constexpr bool operator!=(tagged_bool l, tagged_bool r) &#123; return l.value != r.value; &#125;</div><div class="line">&#125;;</div><div class="line"></div><div class="line">&#125;</div><div class="line"></div><div class="line">using tagged_bool_ns::tagged_bool; // with this tagged_bool is in namespace xplicit but with disabled ADL</div><div class="line"></div><div class="line">&#125;</div><div class="line">&#125;</div><div class="line"></div><div class="line">#endif</div></pre></td></tr></table></figure>]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;闲话不多说，以下只是我的粗略加工，在此记录。原始内容来自这篇文章：&lt;br&gt;Toggles in functions&lt;br&gt;&lt;a href=&quot;https://akrzemi1.wordpress.com/2017/02/16/toggles-in-functions/&quot; ta
+    
+    </summary>
+    
+    
+      <category term="读后感" scheme="http://sssa2000.github.io/tags/%E8%AF%BB%E5%90%8E%E6%84%9F/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>hello hexo</title>
+    <link href="http://sssa2000.github.io/2017/01/15/hello-hexo/"/>
+    <id>http://sssa2000.github.io/2017/01/15/hello-hexo/</id>
+    <published>2017-01-14T18:20:56.000Z</published>
+    <updated>2017-02-20T18:50:09.951Z</updated>
+    
+    <content type="html"><![CDATA[<p><img src="/2017/01/15/hello-hexo/1.jpg" alt=""></p>
+<a id="more"></a>
+<h2 id="起因"><a href="#起因" class="headerlink" title="起因"></a>起因</h2><p>重新部署octopress的时候又遇到各种问题，<br>首先是我发现octopress出到3了，于是很自然的就不能用旧版本了，<br>按照octopress3的文档安装部署总是不能顺利的完成，<br>而且看了一下octopress3的源码提交，好像也没有人继续维护了的感觉，<br>在octopress的官网上也没有把3作为一个正式的产品推出，所以还是有点心生退意。</p>
+<p>恰好之前看到说Hexo用js编写的，用起来也方便，于是就试试。<br>易用性方面Hexo确实是足够简单了。<br>很多人看不上Hexo的原因居然是不够复杂，不够酷。这一点其实我不太敢赞同。因为我觉得工程师也好Hacker也好程序员也好，都不会为了过瘾去做某些事情。 大家在Github上部署静态blog的原因无非就是：</p>
+<ul>
+<li>免费</li>
+<li>自由</li>
+<li>完全可控</li>
+</ul>
+<p>并不是为了炫耀，为了显得与众不同，为了这样的目的去做任何事情其实都有点幼稚的感觉。</p>
+<p>持续写blog的目的其实就是为了写作，记录，整理自己的所得。<br>我选择静态blog 而不是wordpress 来编写tech类的blog的原因其实主要是因为在格式控制、渲染公式、图片、表格上 更可控。</p>
+<hr>
+<h2 id="初次安装"><a href="#初次安装" class="headerlink" title="初次安装"></a>初次安装</h2><p>我并没有选择迁移octopress的数据，而是直接把github的repo清空了，重新开始的。</p>
+<p>遇到的仅有的两个问题</p>
+<ul>
+<li>git clone 以后，如果执行 hexo init，hexo会把repo的git信息全部清理掉。所以，我采取的方式是，在其他目录hexo init，然后把hexo拷贝到repo下。</li>
+<li>config.yml中冒号后面必须有空格的问题，这个是一个大家都知道的bug，不再多言。</li>
+</ul>
+<p>整个过程是这样的：</p>
+<ul>
+<li>安装node.js</li>
+<li>安装Hexo：    <code>sudo npm install -g hexo</code></li>
+<li><p>建立一个目录，用来init hexo。</p>
+<figure class="highlight elixir"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="variable">$ </span>mkdir hexo </div><div class="line"><span class="variable">$ </span>cd hexo </div><div class="line"><span class="variable">$ </span>hexo init</div></pre></td></tr></table></figure>
+</li>
+<li><p>修改_config.yml:</p>
+<figure class="highlight less"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line"><span class="attribute">title</span>: Hippo &amp; YirigaCheffee</div><div class="line"><span class="attribute">subtitle</span>: sssa2000's tech blog</div><div class="line"><span class="attribute">description</span>: </div><div class="line"><span class="attribute">author</span>: sssa2000</div><div class="line"><span class="attribute">language</span>: zh-CN</div><div class="line"><span class="attribute">url</span>: <span class="attribute">http</span>:<span class="comment">//sssa2000.github.io</span></div><div class="line"><span class="attribute">post_asset_folder</span>: true</div><div class="line"><span class="attribute">deploy</span>:</div><div class="line">  <span class="attribute">type</span>: git</div><div class="line">  <span class="attribute">repo</span>: <span class="attribute">https</span>:<span class="comment">//github.com/sssa2000/sssa2000.github.io.git</span></div><div class="line">  <span class="attribute">branch</span>: master</div></pre></td></tr></table></figure>
+</li>
+<li><p>到另一个目录blog，clone github的repo：</p>
+<figure class="highlight crmsh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">git <span class="keyword">clone</span> <span class="title">https</span>://github.com/sssa2000/sssa2000.github.io</div></pre></td></tr></table></figure>
+</li>
+<li><p>创建分支hexo_source，并且切换到这个分支。这个分支是用来把hexo的设置、主题、以及原始的md文件同步到github上的。当然其实也可以不同步到github，保存到网盘或者单独起一个repo也可以。</p>
+<figure class="highlight armasm"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line"><span class="symbol">git</span> <span class="keyword">branch </span>hexo_source</div><div class="line"><span class="symbol">git</span> checkout hexo_source</div></pre></td></tr></table></figure>
+</li>
+<li><p>把hexo目录下的文件，拷贝到repo目录下。</p>
+</li>
+<li><p>在repo目录下 执行npm安装几个hexo的插件</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">$ npm <span class="keyword">install</span> hexo-deployer-git <span class="comment">--save</span></div><div class="line">$ npm <span class="keyword">install</span> hexo-renderer-jade <span class="comment">--save </span></div><div class="line">$ npm <span class="keyword">install</span> hexo-renderer-sass <span class="comment">--save</span></div><div class="line">$ npm <span class="keyword">install</span> https://github.com/CodeFalling/hexo-asset-image <span class="comment">--save</span></div></pre></td></tr></table></figure>
+</li>
+<li><p>在repo的目录下执行生成预览命令，hexo clean很重要！</p>
+<figure class="highlight verilog"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">$ hexo clean </div><div class="line">$ hexo <span class="keyword">generate</span> </div><div class="line">$ hexo server  </div><div class="line">用 http:<span class="comment">//localhost:4000/ 在本地预览</span></div></pre></td></tr></table></figure>
+</li>
+<li><p>用hexo d 来发布网站。</p>
+</li>
+<li>用以下命令把网站源文件备份<figure class="highlight dockerfile"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">确保切换到hexo_source分支</div><div class="line">git checkout hexo_source</div><div class="line">git <span class="keyword">add</span><span class="bash"> .</span></div><div class="line">git commit -m <span class="string">"save blog"</span></div><div class="line">git push origin hexo_source</div></pre></td></tr></table></figure>
+</li>
+</ul>
+<hr>
+<p>##在其他机器安装</p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;&lt;img src=&quot;/2017/01/15/hello-hexo/1.jpg&quot; alt=&quot;&quot;&gt;&lt;/p&gt;
+    
+    </summary>
+    
+    
+      <category term="杂" scheme="http://sssa2000.github.io/tags/%E6%9D%82/"/>
+    
+  </entry>
+  
+  <entry>
+    <title>Hello World</title>
+    <link href="http://sssa2000.github.io/2017/01/15/hello-world/"/>
+    <id>http://sssa2000.github.io/2017/01/15/hello-world/</id>
+    <published>2017-01-14T18:15:25.267Z</published>
+    <updated>2017-01-14T08:24:47.607Z</updated>
+    
+    <content type="html"><![CDATA[<p>Welcome to <a href="https://hexo.io/" target="_blank" rel="external">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/" target="_blank" rel="external">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html" target="_blank" rel="external">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="external">GitHub</a>.</p>
+<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo new <span class="string">"My New Post"</span></div></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="external">Writing</a></p>
+<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo server</div></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="external">Server</a></p>
+<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo generate</div></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="external">Generating</a></p>
+<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ hexo deploy</div></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/deployment.html" target="_blank" rel="external">Deployment</a></p>
+]]></content>
+    
+    <summary type="html">
+    
+      &lt;p&gt;Welcome to &lt;a href=&quot;https://hexo.io/&quot; target=&quot;_blank&quot; rel=&quot;external&quot;&gt;Hexo&lt;/a&gt;! This is your very first post. Check &lt;a href=&quot;https://hexo.
+    
+    </summary>
+    
+    
+  </entry>
+  
+</feed>
