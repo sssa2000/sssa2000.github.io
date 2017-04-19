@@ -13,11 +13,11 @@
 
     <title>
         
-          sssa2000的博客 | sssa2000&#39;s Blog
+          WPT 简介 - sssa2000的博客 | sssa2000&#39;s Blog
         
     </title>
 
-    <link rel="canonical" href="http://sssa2000.github.io/archives/2017/01/">
+    <link rel="canonical" href="http://sssa2000.github.io/2017/04/20/wpt1/">
 
     <!-- Bootstrap Core CSS -->
     <link rel="stylesheet" href="/css/bootstrap.min.css">
@@ -147,7 +147,209 @@
 
 
     <!-- Main Content -->
-    <!-- Default Archive layout, we use archives instead. -->
+    
+<!-- Image to hack wechat -->
+<!-- <img src="http://sssa2000.github.io/img/icon_wechat.png" width="0" height="0"> -->
+<!-- <img src="{{ site.baseurl }}/{% if page.header-img %}{{ page.header-img }}{% else %}{{ site.header-img }}{% endif %}" width="0" height="0"> -->
+
+<!-- Post Header -->
+<style type="text/css">
+    header.intro-header{
+        background-image: url('/img/home-bg.jpg')
+    }
+</style>
+<header class="intro-header" >
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+                <div class="post-heading">
+                    <div class="tags">
+                        
+                          <a class="tag" href="/tags/#wpt" title="wpt">wpt</a>
+                        
+                    </div>
+                    <h1>WPT 简介</h1>
+                    <h2 class="subheading"></h2>
+                    <span class="meta">
+                        Posted by sssa2000 on
+                        2017-04-20
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<!-- Post Content -->
+<article>
+    <div class="container">
+        <div class="row">
+
+    <!-- Post Container -->
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                post-container">
+
+                <p>工作多年，有很大一部分时间是在和性能做斗争。比较幸运的是Windows操作系统中能用的手段还算是比较多，从开发环境自带的到硬件厂商提供的，或者是开源社区提供的，五花八门各显神通，最近比较深入的接触了一下Windows提供的 WPT 后，觉得用处还蛮大的。</p>
+<h2 id="概念"><a href="#概念" class="headerlink" title="概念"></a>概念</h2><ul>
+<li>Event Tracing for Windows ，ETW 。ETW 是 windows 系统内置的 高速的事件记录机制，ETW 允许 Windows 和应用程序有效地生成事件。可以在任意时间启用和禁用事件，无需重新启动系统或进程。正是由于底层有完善的etw的支撑，才有了上层完善的工具链。</li>
+<li><p>Windows Performance Toolkit ，WPT。是一组工具集，你可以在 Windows ADK 或者 Windows SDK 中找到它。后面提到的WPR、WPA、GPUView 都是这个工具集的一部分。</p>
+</li>
+<li><p>Windows Performance Recorder，简称 WPR 。带有GUI，这是用来记录性能数据的工具，会生成etl文件，供wpa打开。可以认为是带有GUI的xperf。</p>
+</li>
+<li>Windows Performance Analyzer，WPA 。是一个可视化的数据呈现工具。</li>
+<li>xperf 。 WPT中包含的命令行工具，用来记录性能数据。但是犹豫命令行参数比较复杂，通常会用GUI工具替代。</li>
+<li>UIforETW 。 google提供的开源的工具，可以认为是 WPR 的更强大的扩展。 UIforETW 提供了更有用的计数器，也提供了更友好的GUI 。<a href="https://github.com/google/UIforETW/releases" target="_blank" rel="external">https://github.com/google/UIforETW/releases</a><ul>
+<li>UIforETW 提供了 etw文件压缩的功能</li>
+<li>提供了 ring buffer的记录的方式</li>
+<li>UIforETW 会记录所有的输入事件，这个对于排查游戏卡顿有极大的价值</li>
+<li>UIforETW 会以更加友好的方式来组织用到的pdb，按照etw文件来组织pdb，更有利于多个版本的pdb共存</li>
+<li>UIforETW 能监控某个进程的workingset、监测电脑电池的情况、cpu的频率变化、heap tracing……</li>
+</ul>
+</li>
+</ul>
+<h2 id="能做什么"><a href="#能做什么" class="headerlink" title="能做什么"></a>能做什么</h2><p>所有能做的事情都是托ETW的福，ETW 能够让我们获取到系统整体的性能状态，还能够自定义事件记录下来。 ETW 能让我们从系统全局的角度来审视，在某一时刻，系统中所有的进程都在干什么。 像一般的获取某个线程的函数调用栈什么的是很普通的功能，还有一些对游戏开发很有帮助的数据，例如：</p>
+<ul>
+<li>硬盘的磁头移动的距离。看到这个我想起了多年前为了加速VFS的访问效率做过的那些实验…</li>
+<li>任意时刻 UI线程是否处在被阻塞的状态。</li>
+<li>任意时刻 GPU的负载</li>
+<li>任意时刻 虚拟内存、物理内存、页面错误的情况</li>
+<li>任意时刻 CPU idle的情况，线程等待的情况</li>
+</ul>
+<p>把这些数据用时间线统一组织起来，对于排查性能问题来说简直是太方便了，尤其是排查卡顿、延迟类的性能问题，这类问题的线索通常无法直接在本进程找到，需要从其他地方找到线索。例如，在没有ETW的时候，你发现某个线程卡住了，你只能去猜测一个原因，然后做实验去验证猜测。有了ETW以后，你可以清楚的看到某个线程的等待是在等待其他线程还是等待IO……</p>
+
+
+                <hr>
+
+                
+
+                <ul class="pager">
+                    
+                        <li class="previous">
+                            <a href="/2017/02/21/Toggles-Use-Enum-in-cpp11/" data-toggle="tooltip" data-placement="top" title="强类型枚举 和 bool 传参">&larr; Previous Post</a>
+                        </li>
+                    
+                    
+                </ul>
+
+                
+
+                
+                <!-- disqus 评论框 start -->
+                <div class="comment">
+                    <div id="disqus_thread" class="disqus-thread"></div>
+                </div>
+                <!-- disqus 评论框 end -->
+                
+
+            </div>
+    <!-- Side Catalog Container -->
+        
+
+    <!-- Sidebar Container -->
+
+            <div class="
+                col-lg-8 col-lg-offset-2
+                col-md-10 col-md-offset-1
+                sidebar-container">
+
+                <!-- Featured Tags -->
+                
+                <section>
+                    <!-- no hr -->
+                    <h5><a href="/tags/">FEATURED TAGS</a></h5>
+                    <div class="tags">
+                       
+                          <a class="tag" href="/tags/#wpt" title="wpt">wpt</a>
+                        
+                    </div>
+                </section>
+                
+
+                <!-- Friends Blog -->
+                
+                <hr>
+                <h5>FRIENDS</h5>
+                <ul class="list-inline">
+
+                    
+                        <li><a href="http://blog.kaijun.rocks" target="_blank">Kaijun&#39;s Blog</a></li>
+                    
+                        <li><a href="http://huangxuan.me" target="_blank">Hux Blog</a></li>
+                    
+                        <li><a href="#" target="_blank">Foo</a></li>
+                    
+                        <li><a href="#" target="_blank">Bar</a></li>
+                    
+                        <li><a href="#" target="_blank">Example Friends</a></li>
+                    
+                        <li><a href="#" target="_blank">It helps SEO</a></li>
+                    
+                </ul>
+                
+            </div>
+
+        </div>
+    </div>
+</article>
+
+
+
+
+<!-- disqus 公共JS代码 start (一个网页只需插入一次) -->
+<script type="text/javascript">
+    /* * * CONFIGURATION VARIABLES * * */
+    var disqus_shortname = "hexo-theme-huxblog";
+    var disqus_identifier = "http://sssa2000.github.io/2017/04/20/wpt1/";
+    var disqus_url = "http://sssa2000.github.io/2017/04/20/wpt1/";
+
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<!-- disqus 公共JS代码 end -->
+
+
+
+
+<!-- async load function -->
+<script>
+    function async(u, c) {
+      var d = document, t = 'script',
+          o = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+      o.src = u;
+      if (c) { o.addEventListener('load', function (e) { c(null, e); }, false); }
+      s.parentNode.insertBefore(o, s);
+    }
+</script>
+<!-- anchor-js, Doc:http://bryanbraun.github.io/anchorjs/ -->
+<script>
+    async("https://cdn.bootcss.com/anchor-js/1.1.1/anchor.min.js",function(){
+        anchors.options = {
+          visible: 'always',
+          placement: 'right',
+          icon: '#'
+        };
+        anchors.add().remove('.intro-header h1').remove('.subheading').remove('.sidebar-container h5');
+    })
+</script>
+<style>
+    /* place left on bigger screen */
+    @media all and (min-width: 800px) {
+        .anchorjs-link{
+            position: absolute;
+            left: -0.75em;
+            font-size: 1.1em;
+            margin-top : -0.1em;
+        }
+    }
+</style>
+
+
 
     <!-- Footer -->
     <!-- Footer -->
