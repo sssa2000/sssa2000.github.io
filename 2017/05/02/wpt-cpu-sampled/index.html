@@ -13,11 +13,11 @@
 
     <title>
         
-          hello hexo - sssa2000的博客 | sssa2000&#39;s Blog
+          WPA 图表：CPU Sampling - sssa2000的博客 | sssa2000&#39;s Blog
         
     </title>
 
-    <link rel="canonical" href="http://sssa2000.github.io/2017/01/15/hello-hexo/">
+    <link rel="canonical" href="http://sssa2000.github.io/2017/05/02/wpt-cpu-sampled/">
 
     <!-- Bootstrap Core CSS -->
     <link rel="stylesheet" href="/css/bootstrap.min.css">
@@ -155,7 +155,7 @@
 <!-- Post Header -->
 <style type="text/css">
     header.intro-header{
-        background-image: url('/img/404-bg.jpg')
+        background-image: url('/img/home-bg.jpg')
     }
 </style>
 <header class="intro-header" >
@@ -165,14 +165,12 @@
                 <div class="post-heading">
                     <div class="tags">
                         
-                          <a class="tag" href="/tags/#杂" title="杂">杂</a>
-                        
                     </div>
-                    <h1>hello hexo</h1>
+                    <h1>WPA 图表：CPU Sampling</h1>
                     <h2 class="subheading"></h2>
                     <span class="meta">
                         Posted by sssa2000 on
-                        2017-01-15
+                        2017-05-02
                     </span>
                 </div>
             </div>
@@ -191,66 +189,59 @@
                 col-md-10 col-md-offset-1
                 post-container">
 
-                <p><img src="/img/hello-hexo/1.jpg" alt=""></p>
-<h2 id="起因"><a href="#起因" class="headerlink" title="起因"></a>起因</h2><p>重新部署octopress的时候又遇到各种问题，<br>首先是我发现octopress出到3了，于是很自然的就不能用旧版本了，<br>按照octopress3的文档安装部署总是不能顺利的完成，<br>而且看了一下octopress3的源码提交，好像也没有人继续维护了的感觉，<br>在octopress的官网上也没有把3作为一个正式的产品推出，所以还是有点心生退意。</p>
-<p>恰好之前看到说Hexo用js编写的，用起来也方便，于是就试试。<br>易用性方面Hexo确实是足够简单了。<br>很多人看不上Hexo的原因居然是不够复杂，不够酷。这一点其实我不太敢赞同。因为我觉得工程师也好Hacker也好程序员也好，都不会为了过瘾去做某些事情。 大家在Github上部署静态blog的原因无非就是：</p>
+                <p>本文将简单谈一下 WPA 中的某一类图表 CPU Sampling。</p>
+<p>当获得etw的快照之后，就能够使用wpa来进行分析。获取etw的快照可以使用wpa、也可以使用xperf，也可以使用UIforETW。我个人喜欢用 UIforETW。使用UIforETW 获得Tracing的快照之后，可以直接在UIforETW的界面直接选择使用WPA 打开这个快照。</p>
+<p><img src="/img/wpt-cpu-sampled/1.png" alt=""></p>
+<p>CPU Sampling 类型的图表是最常用的图表。其实在VisualStudio中已经有这样的功能了，就是VS自带的性能Profile功能。这里只是换了个展示的方式罢了。</p>
+<p>CPU Sampling 指的是利用采样技术来获取程序运行时间相关的数据的方法。你可以在 WPA 的<code>Computation\CPU Usage(Sampled)</code> 下找到这类的数据。</p>
+<p><img src="/img/wpt-cpu-sampled/2.png" alt=""></p>
+<p>在CPU Usage(Sampled) 下 有多种图表，这些都是属于CPU Usage(Sampled) 的图表。如下图：</p>
+<p><img src="/img/wpt-cpu-sampled/3.png" alt=""></p>
+<h2 id="DPC-and-ISR-Usage-by-Module-Stack"><a href="#DPC-and-ISR-Usage-by-Module-Stack" class="headerlink" title="DPC and ISR Usage by Module, Stack"></a>DPC and ISR Usage by Module, Stack</h2><p>一般来说如果不是做硬件相关或者驱动开发相关的，这个图表可以忽略。</p>
+<p>不过概念还是应该有所了解的。</p>
 <ul>
-<li>免费</li>
-<li>自由</li>
-<li>完全可控</li>
+<li>ISR：Interrupt Service Routines 可以理解为当硬件中断发生时的回调函数, 这是必须马上做的事情，比如硬件中断，响应鼠标点击。</li>
+<li>DPC：Deferred Procedure Call Details 延迟过程调用可以推迟做的事情，比如大数据拷贝，U盘拷贝电影。</li>
 </ul>
-<p>并不是为了炫耀，为了显得与众不同，为了这样的目的去做任何事情其实都有点幼稚的感觉。</p>
-<p>持续写blog的目的其实就是为了写作，记录，整理自己的所得。<br>我选择静态blog 而不是wordpress 来编写tech类的blog的原因其实主要是因为在格式控制、渲染公式、图片、表格上 更可控。</p>
-<hr>
-<h2 id="初次安装"><a href="#初次安装" class="headerlink" title="初次安装"></a>初次安装</h2><p>我并没有选择迁移octopress的数据，而是直接把github的repo清空了，重新开始的。</p>
-<p>遇到的仅有的两个问题</p>
+<p>在windows中，计算机的硬件（例如网卡）如果要使用cpu资源，那么会由硬件生成一个中断，windows拿到中断后，会挂起当前执行的线程，转而执行该中断相关的代码，也就是 ISR。</p>
+<p>当执行ISR的过程中，处理器无法做其他的事情，包括响应其他中断。所以，ISR必须快速处理。为了减少执行isr的时间，isr会调度DPC来执行中断中必须完成点任务。对每一个逻辑处理器来说，wondiws维护了一个队列来调度dpcs。Dpcs 的优先级在所有线程优先级之上，逻辑处理器需要完成当前队列中所有的dpc后，才能转而执行线程。</p>
+<p>在windows中只要是 ISR 或者 DPC 的代码，优先级都是最高的，所以当处理器执行ISR 或者 DPC 的代码时，用户态代码的线程都是被挂起的。这个特性可能会导致问题，当用户态的线程需要一定的吞吐量或者需要精确计时，例如播放音频或者视频。如果此时处理器在执行 DPCs或者 ISRs，那么可能导致无法及时的完成。</p>
+<h2 id="Flame-By-Process-Stack"><a href="#Flame-By-Process-Stack" class="headerlink" title="Flame By Process Stack"></a>Flame By Process Stack</h2><p><img src="/img/wpt-cpu-sampled/4.png" alt=""></p>
+<p>Flame graph 又叫 火焰图。 这种图表的优势是能够直观的表达：父子关系、时间长短。<br>在 WPA 的 Flame By Process Stack 图表中，展现的是每个进程中比较耗时的调用栈。注意这里不是每一个时刻的调用栈，而是tracing这段时间内的所有调用栈中，选出来的最耗时的几个。利用火焰图展示出来。</p>
+<p>例如在下图中，x轴表示时间，y轴表示的是调用栈的深度。<br>每一条横杠表示的就是一个调用函数，越底部的表示在调用栈底部，越上面的表示越接近调用栈的栈顶。<br>从图中可以看出这么几个信息：</p>
 <ul>
-<li>git clone 以后，如果执行 hexo init，hexo会把repo的git信息全部清理掉。所以，我采取的方式是，在其他目录hexo init，然后把hexo拷贝到repo下。</li>
-<li>config.yml中冒号后面必须有空格的问题，这个是一个大家都知道的bug，不再多言。</li>
+<li>这段时间内最深的调用栈在哪。看图中哪里最高，哪里就是最深的调用栈。</li>
+<li>哪个调用栈最耗时。看图表底部哪个函数延续了最长时间，那么这个调用栈也就耗费最长。</li>
 </ul>
-<p>整个过程是这样的：</p>
+<p><img src="/img/wpt-cpu-sampled/5.png" alt=""></p>
+<p>当我们选中上面的图表中的某一个函数：engine.dll!H3D::Task::ProcessTaskStep，在火焰图中可以很清晰的看到这个函数以及它发起的函数调用，占用整个tracing时间的比例，以及最深的函数调用发生在哪 </p>
+<p>当选中另一个函数engine.dll!H3D::IOLoadCHRTask::OnParseFile 后，火焰图的变化：</p>
+<p><img src="/img/wpt-cpu-sampled/6.png" alt=""></p>
+<p>所以，火焰图最适合用在以下情景：</p>
 <ul>
-<li>安装node.js</li>
-<li>安装Hexo：    <code>sudo npm install -g hexo</code></li>
-<li><p>建立一个目录，用来init hexo。</p>
-<figure class="highlight elixir"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line"><span class="variable">$ </span>mkdir hexo </div><div class="line"><span class="variable">$ </span>cd hexo </div><div class="line"><span class="variable">$ </span>hexo init</div></pre></td></tr></table></figure>
-</li>
-<li><p>修改_config.yml:</p>
-<figure class="highlight less"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line"><span class="attribute">title</span>: Hippo &amp; YirigaCheffee</div><div class="line"><span class="attribute">subtitle</span>: sssa2000's tech blog</div><div class="line"><span class="attribute">description</span>: </div><div class="line"><span class="attribute">author</span>: sssa2000</div><div class="line"><span class="attribute">language</span>: zh-CN</div><div class="line"><span class="attribute">url</span>: <span class="attribute">http</span>:<span class="comment">//sssa2000.github.io</span></div><div class="line"><span class="attribute">post_asset_folder</span>: true</div><div class="line"><span class="attribute">deploy</span>:</div><div class="line">  <span class="attribute">type</span>: git</div><div class="line">  <span class="attribute">repo</span>: <span class="attribute">https</span>:<span class="comment">//github.com/sssa2000/sssa2000.github.io.git</span></div><div class="line">  <span class="attribute">branch</span>: master</div></pre></td></tr></table></figure>
-</li>
-<li><p>到另一个目录blog，clone github的repo：</p>
-<figure class="highlight crmsh"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">git <span class="keyword">clone</span> <span class="title">https</span>://github.com/sssa2000/sssa2000.github.io</div></pre></td></tr></table></figure>
-</li>
-<li><p>创建分支hexo_source，并且切换到这个分支。这个分支是用来把hexo的设置、主题、以及原始的md文件同步到github上的。当然其实也可以不同步到github，保存到网盘或者单独起一个repo也可以。</p>
-<figure class="highlight armasm"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div></pre></td><td class="code"><pre><div class="line"><span class="symbol">git</span> <span class="keyword">branch </span>hexo_source</div><div class="line"><span class="symbol">git</span> checkout hexo_source</div></pre></td></tr></table></figure>
-</li>
-<li><p>把hexo目录下的文件，拷贝到repo目录下。</p>
-</li>
-<li><p>在repo目录下 执行npm安装几个hexo的插件</p>
-<figure class="highlight sql"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">$ npm <span class="keyword">install</span> hexo-deployer-git <span class="comment">--save</span></div><div class="line">$ npm <span class="keyword">install</span> hexo-renderer-jade <span class="comment">--save </span></div><div class="line">$ npm <span class="keyword">install</span> hexo-renderer-sass <span class="comment">--save</span></div><div class="line">$ npm <span class="keyword">install</span> https://github.com/CodeFalling/hexo-asset-image <span class="comment">--save</span></div></pre></td></tr></table></figure>
-</li>
-<li><p>在repo的目录下执行生成预览命令，hexo clean很重要！</p>
-<figure class="highlight verilog"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">$ hexo clean </div><div class="line">$ hexo <span class="keyword">generate</span> </div><div class="line">$ hexo server  </div><div class="line">用 http:<span class="comment">//localhost:4000/ 在本地预览</span></div></pre></td></tr></table></figure>
-</li>
-<li><p>用hexo d 来发布网站。</p>
-</li>
-<li>用以下命令把网站源文件备份<figure class="highlight dockerfile"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">确保切换到hexo_source分支</div><div class="line">git checkout hexo_source</div><div class="line">git <span class="keyword">add</span><span class="bash"> .</span></div><div class="line">git commit -m <span class="string">"save blog"</span></div><div class="line">git push origin hexo_source</div></pre></td></tr></table></figure>
-</li>
+<li>当你想看某个进程的比较耗时的调用栈，并且想看这个栈的深度和持续时间</li>
 </ul>
-<hr>
-<h2 id="在Mac-下的安装"><a href="#在Mac-下的安装" class="headerlink" title="在Mac 下的安装"></a>在Mac 下的安装</h2><ul>
-<li>首先要在Mac上安装Xcode，因为homebrew依赖。</li>
-<li><p>安装homebrew主要是为了方便的安装git。安装homebrew的方法是在终端输入</p>
-<figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">ruby <span class="_">-e</span> <span class="string">"<span class="variable">$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)</span>"</span></div></pre></td></tr></table></figure>
-</li>
-<li><p>安装Node.js。我是在官网下载的dmg安装的 也可以用git的方式安装</p>
-</li>
-<li>克隆blog的仓库。因为这个时候github上已经有仓库了，所以只需要克隆下来即可。假设克隆的仓库的地址是gitblog</li>
-<li>进入到gitblog目录，切换到hexo_source分支。这个分支是之前在另一台电脑上创建的分支 已经上传github。</li>
-<li>进入到gitblog，安装hexo：也就是在终端执行hexo init，或者在别的目录执行hexo init 然后把文件拷贝过来</li>
-<li>在repo目录下 执行npm安装几个hexo的插件<br>```<br>$ npm install hexo-deployer-git –save<br>$ npm install hexo-renderer-jade –save<br>$ npm install hexo-renderer-sass –save<br>$ npm install <a href="https://github.com/CodeFalling/hexo-asset-image" target="_blank" rel="external">https://github.com/CodeFalling/hexo-asset-image</a> –save</li>
-<li>此时已经可以用了。</li>
+<h2 id="Randomascii-exculsive-module-and-function"><a href="#Randomascii-exculsive-module-and-function" class="headerlink" title="Randomascii exculsive (module and function)"></a>Randomascii exculsive (module and function)</h2><p>这个图表是 UIforETW 定制的图表。意思是“函数独占时间信息”。和VS中的 profiler 一样。</p>
+<p><img src="/img/wpt-cpu-sampled/7.png" alt=""></p>
+<p>这个表格中按照进程、线程 列出了函数独占时间最高的几个函数。如果加载了pdb，就能够看到比较详细的信息。</p>
+<p>这里唯一需要解释一下的就是表格中的Count和Weight的含义。<br>前面提到这里的图表都是通过CPU采样的技术获得的数据，WPT中采用的采样频率默认是1KHz，也就是每毫秒一次。</p>
+<ul>
+<li>Count表示的是在tracing这段时间内，这个函数命中了多少个采样点。</li>
+<li>Weight表示的是这些采样点的时间总和。</li>
 </ul>
+<h2 id="Randomascii-inculsive-stack"><a href="#Randomascii-inculsive-stack" class="headerlink" title="Randomascii inculsive (stack)"></a>Randomascii inculsive (stack)</h2><p>这个图表也是UIforETW定制的，表达的意思是非独占函数花费的时间。</p>
+<p>非独占的视图的价值在于确认：耗时的调用栈在哪，谁发起的？<br>独占的视图用来确认，哪个函数自身花费的时间最长。</p>
+<h2 id="Utilization-by-COFF-Group-Module-Function"><a href="#Utilization-by-COFF-Group-Module-Function" class="headerlink" title="Utilization by COFF Group, Module, Function"></a>Utilization by COFF Group, Module, Function</h2><p>其实。。。。我也没搞明白这个的具体含义。也没有找到相关的资料介绍。</p>
+<h2 id="Utilization-by-Process-and-Thread"><a href="#Utilization-by-Process-and-Thread" class="headerlink" title="Utilization by Process and Thread"></a>Utilization by Process and Thread</h2><p><img src="/img/wpt-cpu-sampled/8.png" alt=""></p>
+<p>Utilization by xxx的图表有好多，我觉得最有用的还是这个，其他都大同小异。<br>这个图表能够显示每一个进程中的每一个线程，在每个采样点时刻使用CPU的情况。<br>这个图表很有用，因为它能够根据时刻来找到哪个进程、哪个线程占用了CPU资源。能够直观的看到这些线程什么时候繁忙什么时候空闲了。</p>
+<p>这里最关键的价值在于它是能够按照时间来检索，配合其他的图表能够发挥很大的威力。</p>
+<h2 id="Utilization-by-xxx-Stack"><a href="#Utilization-by-xxx-Stack" class="headerlink" title="Utilization by xxx Stack"></a>Utilization by xxx Stack</h2><p>这里包括两个图表：</p>
+<ul>
+<li>Utilization by Process Stack</li>
+<li>Utilization by Process, thread Stack</li>
+</ul>
+<p>其实就是按进程和线程组织的 非独占的调用栈信息。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>我个人最喜欢用 先用 Utilization by Process and Thread 看一下各个进程和线程利用CPU的情况，然后把不想看的进程和线程剔除掉，用 Randomascii inculsive (stack) 和  Randomascii exculsive (module and function) 看看有没有直接能看到的信息</p>
 
 
                 <hr>
@@ -259,10 +250,10 @@
 
                 <ul class="pager">
                     
-                    
-                        <li class="next">
-                            <a href="/2017/02/21/Toggles-Use-Enum-in-cpp11/" data-toggle="tooltip" data-placement="top" title="强类型枚举 和 bool 传参">Next Post &rarr;</a>
+                        <li class="previous">
+                            <a href="/2017/04/20/wpt1/" data-toggle="tooltip" data-placement="top" title="WPT 简介">&larr; Previous Post</a>
                         </li>
+                    
                     
                 </ul>
 
@@ -294,8 +285,6 @@
                     <h5><a href="/tags/">FEATURED TAGS</a></h5>
                     <div class="tags">
                        
-                          <a class="tag" href="/tags/#杂" title="杂">杂</a>
-                        
                     </div>
                 </section>
                 
@@ -334,8 +323,8 @@
 <script type="text/javascript">
     /* * * CONFIGURATION VARIABLES * * */
     var disqus_shortname = "hexo-theme-huxblog";
-    var disqus_identifier = "http://sssa2000.github.io/2017/01/15/hello-hexo/";
-    var disqus_url = "http://sssa2000.github.io/2017/01/15/hello-hexo/";
+    var disqus_identifier = "http://sssa2000.github.io/2017/05/02/wpt-cpu-sampled/";
+    var disqus_url = "http://sssa2000.github.io/2017/05/02/wpt-cpu-sampled/";
 
     (function() {
         var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
